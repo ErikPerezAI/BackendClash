@@ -184,41 +184,6 @@ export const updateMyProfile = async (req, res, next) => {
 };
 
 /**
- * Cambiar el rol del propio usuario autenticado ('user' | 'admin') para demostración y pruebas de permisos
- * PUT /api/profiles/me/role
- */
-export const switchMyRoleForDemo = async (req, res, next) => {
-  try {
-    const rawRole = String(req.body?.role || '').trim().toLowerCase();
-    if (!['user', 'admin'].includes(rawRole)) {
-      return res.status(400).json({
-        error: 'El rol debe ser "user" o "admin"'
-      });
-    }
-
-    const dbClient = supabaseAdmin || req.supabase;
-    const { data, error } = await dbClient
-      .from('profiles')
-      .update({
-        role: rawRole,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', req.user.id)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    res.status(200).json({
-      message: `Tu rol ha sido actualizado a "${rawRole.toUpperCase()}" exitosamente`,
-      profile: data
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
  * Actualizar el rol de cualquier usuario del sistema (Requiere rol de Administrador)
  * PUT /api/profiles/:id/role
  */
