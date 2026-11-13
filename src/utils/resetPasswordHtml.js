@@ -1,14 +1,20 @@
 /**
- * Genera la página HTML interactiva para el restablecimiento de contraseñas de ClashTactics.
+ * Genera la página HTML interactiva para el restablecimiento de contraseñas y retorno OAuth de ClashTactics.
  * Diseñada para funcionar tanto en computadoras de escritorio como en dispositivos móviles (iOS/Android).
  */
-export function getResetPasswordHtml() {
+export function getResetPasswordHtml({
+  defaultMode = 'landing',
+  oauthRedirectUrl = 'clashtactics://google-auth'
+} = {}) {
+  const safeDefaultModeJson = JSON.stringify(defaultMode).replace(/</g, '\\u003c');
+  const safeOauthRedirectJson = JSON.stringify(oauthRedirectUrl || 'clashtactics://google-auth').replace(/</g, '\\u003c');
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Restablecer Contraseña | ClashTactics</title>
+  <title>ClashTactics</title>
   <style>
     * {
       box-sizing: border-box;
@@ -237,12 +243,42 @@ export function getResetPasswordHtml() {
     </div>
 
     <h1>ClashTactics</h1>
-    <p class="subtitle" id="form-subtitle">Ingresa tu nueva contraseña para acceder a tu cuenta.</p>
+    <p class="subtitle" id="form-subtitle" style="display: none;">Ingresa tu nueva contraseña para acceder a tu cuenta.</p>
 
     <div class="alert alert-error" id="error-alert"></div>
     <div class="alert alert-success" id="success-alert"></div>
 
-    <form id="reset-form" onsubmit="handleResetPassword(event)">
+    <div class="success-view" id="oauth-view" style="display: none;">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      </div>
+      <h2 id="oauth-title" style="color: #ffffff; font-size: 20px; margin-bottom: 8px;">¡Sesión con Google lista!</h2>
+      <p id="oauth-subtitle" style="color: #8b949e; font-size: 14px; line-height: 1.5; margin-bottom: 12px;">
+        Redirigiendo automáticamente de vuelta a ClashTactics...
+      </p>
+      <a id="oauth-app-btn" href="clashtactics://google-auth" class="app-btn">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        Volver a ClashTactics
+      </a>
+    </div>
+
+    <div class="success-view" id="welcome-view" style="display: none;">
+      <h2 style="color: #ffffff; font-size: 20px; margin-bottom: 8px;">Acceso ClashTactics</h2>
+      <p style="color: #8b949e; font-size: 14px; line-height: 1.5; margin-bottom: 12px;">
+        Tu sesión o enlace debe completarse dentro de la aplicación móvil ClashTactics.
+      </p>
+      <a href="clashtactics://" class="app-btn">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        Abrir ClashTactics
+      </a>
+      <p class="footer-text" style="margin-top: 16px;">
+        ¿Querés cambiar una contraseña olvidada? <a href="/reset-password">Ir a restablecer contraseña</a>
+      </p>
+    </div>
+
+    <form id="reset-form" style="display: none;" onsubmit="handleResetPassword(event)">
       <!-- Campos opcionales si no se cuenta con token en la URL -->
       <div class="form-group" id="group-email" style="display: none;">
         <label for="email">Correo electrónico</label>
@@ -306,27 +342,101 @@ export function getResetPasswordHtml() {
   </div>
 
   <script>
+    const DEFAULT_PAGE_MODE = ${safeDefaultModeJson};
+    const SERVER_OAUTH_REDIRECT = ${safeOauthRedirectJson};
     let currentAccessToken = null;
 
-    // Analizar fragmento hash (#access_token=...&type=recovery) y query params (?code=...&token=...)
-    function parseAuthParameters() {
-      const hash = window.location.hash.substring(1);
-      const hashParams = new URLSearchParams(hash);
-      const queryParams = new URLSearchParams(window.location.search);
+    function buildSafeAppReturnUrl(baseRedirect, rawSearch, rawHash) {
+      const target =
+        typeof baseRedirect === 'string' && /^(clashtactics|exp|exps|https?):\/\//i.test(baseRedirect.trim())
+          ? baseRedirect.trim()
+          : 'clashtactics://google-auth';
 
+      const cleanSearch = rawSearch && rawSearch.length > 1 ? rawSearch.replace(/^\?/, '') : '';
+      const cleanHash = rawHash && rawHash.length > 1 ? rawHash.replace(/^#/, '') : '';
+
+      let finalUrl = target;
+      if (cleanSearch) {
+        finalUrl += (finalUrl.includes('?') ? '&' : '?') + cleanSearch;
+      }
+      if (cleanHash) {
+        finalUrl += (finalUrl.includes('#') ? '&' : '#') + cleanHash;
+      }
+      return finalUrl;
+    }
+
+    // Detectar si venimos de Google OAuth (Site URL fallback), recuperación de contraseña o visita directa
+    function parseAuthParameters() {
+      const rawHash = window.location.hash || '';
+      const rawSearch = window.location.search || '';
+      const hash = rawHash.startsWith('#') ? rawHash.substring(1) : rawHash;
+      const hashParams = new URLSearchParams(hash);
+      const queryParams = new URLSearchParams(rawSearch);
+
+      const authType = (hashParams.get('type') || queryParams.get('type') || '').toLowerCase();
       const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
-      const token = queryParams.get('token') || queryParams.get('code');
+      const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+      const providerToken = hashParams.get('provider_token') || queryParams.get('provider_token');
+      const oauthError =
+        hashParams.get('error') ||
+        queryParams.get('error') ||
+        hashParams.get('error_description') ||
+        queryParams.get('error_description');
+      const otpToken = queryParams.get('token');
+      const authCode = queryParams.get('code');
       const email = queryParams.get('email');
 
-      if (accessToken) {
-        currentAccessToken = accessToken;
-      } else {
-        // Si no hay access_token, mostramos los campos de email y código OTP
-        document.getElementById('group-email').style.display = 'block';
-        document.getElementById('group-token').style.display = 'block';
-        if (email) document.getElementById('email').value = email;
-        if (token) document.getElementById('token').value = token;
+      const resetForm = document.getElementById('reset-form');
+      const formSubtitle = document.getElementById('form-subtitle');
+      const oauthView = document.getElementById('oauth-view');
+      const welcomeView = document.getElementById('welcome-view');
+
+      const isExplicitRecovery = authType === 'recovery' || Boolean(otpToken);
+      const hasOAuthReturn =
+        !isExplicitRecovery &&
+        Boolean(accessToken || providerToken || refreshToken || authCode || oauthError);
+
+      if (hasOAuthReturn) {
+        oauthView.style.display = 'block';
+        if (oauthError) {
+          document.getElementById('oauth-title').textContent = 'Volviendo a ClashTactics...';
+          document.getElementById('oauth-subtitle').textContent =
+            'Cerrando autenticación y devolviéndote a la app...';
+        }
+
+        const returnUrl = buildSafeAppReturnUrl(SERVER_OAUTH_REDIRECT, rawSearch, rawHash);
+        const appBtn = document.getElementById('oauth-app-btn');
+        appBtn.setAttribute('href', returnUrl);
+        document.cookie = 'ct_oauth_redirect_to=; Max-Age=0; path=/';
+
+        try {
+          window.location.replace(returnUrl);
+        } catch {
+          window.location.href = returnUrl;
+        }
+        setTimeout(() => {
+          window.location.href = returnUrl;
+        }, 250);
+        return;
       }
+
+      if (isExplicitRecovery || DEFAULT_PAGE_MODE === 'recovery') {
+        formSubtitle.style.display = 'block';
+        resetForm.style.display = 'block';
+
+        if (accessToken) {
+          currentAccessToken = accessToken;
+        } else {
+          // Si no hay access_token, mostramos los campos de email y código OTP
+          document.getElementById('group-email').style.display = 'block';
+          document.getElementById('group-token').style.display = 'block';
+          if (email) document.getElementById('email').value = email;
+          if (otpToken || authCode) document.getElementById('token').value = otpToken || authCode;
+        }
+        return;
+      }
+
+      welcomeView.style.display = 'block';
     }
 
     parseAuthParameters();

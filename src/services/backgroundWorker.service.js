@@ -1,6 +1,6 @@
 import { supabaseAdmin, supabaseClient } from '../config/supabase.js';
 import { supercellApi } from './supercell.service.js';
-import { createAndSendNotification } from './notification.service.js';
+import { createAndSendNotification, getUserNotifications } from './notification.service.js';
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // Cada 5 minutos
 const notifiedUpgradeKeys = new Set();
@@ -93,8 +93,38 @@ export const runBackgroundSyncNow = async ({
 
     const rows = claimedRows || [];
     cycleVillages = rows.length;
+    const persistedKeysByUser = new Map();
+
+    const hasAlreadyNotified = async (userId, dedupeKey) => {
+      if (notifiedUpgradeKeys.has(dedupeKey)) return true;
+
+      let userKeys = persistedKeysByUser.get(userId);
+      if (!userKeys) {
+        userKeys = new Set();
+        try {
+          const inbox = await getUserNotifications(userId);
+          for (const notif of inbox.notifications || []) {
+            if (Array.isArray(notif?.data?.dedupe_keys)) {
+              for (const k of notif.data.dedupe_keys) {
+                if (typeof k === 'string') userKeys.add(k);
+              }
+            }
+          }
+        } catch {
+          // Si falla lectura, seguimos con el Set en memoria
+        }
+        persistedKeysByUser.set(userId, userKeys);
+      }
+
+      if (userKeys.has(dedupeKey)) {
+        notifiedUpgradeKeys.add(dedupeKey);
+        return true;
+      }
+      return false;
+    };
 
     for (const row of rows) {
+      if (!row.user_id) continue;
       const vd = row.village_data;
       if (!vd || !Array.isArray(vd.activeUpgrades)) continue;
 
@@ -133,7 +163,12 @@ export const runBackgroundSyncNow = async ({
       }
 
       // Enviar notificación por mejoras completadas
-      const freshCompleted = completedNow.filter((c) => !notifiedUpgradeKeys.has(c.dedupeKey));
+      const freshCompleted = [];
+      for (const item of completedNow) {
+        if (!(await hasAlreadyNotified(row.user_id, item.dedupeKey))) {
+          freshCompleted.push(item);
+        }
+      }
       if (freshCompleted.length > 0) {
         freshCompleted.forEach((c) => notifiedUpgradeKeys.add(c.dedupeKey));
         const namesList = freshCompleted
@@ -149,14 +184,20 @@ export const runBackgroundSyncNow = async ({
           data: {
             player_tag: row.player_tag,
             player_name: row.player_name,
-            completed_count: freshCompleted.length
+            completed_count: freshCompleted.length,
+            dedupe_keys: freshCompleted.map((c) => c.dedupeKey)
           }
         });
         cycleNotifications++;
       }
 
       // Enviar notificación por mejoras a punto de terminar (< 1 hora)
-      const freshSoon = finishingSoon.filter((s) => !notifiedUpgradeKeys.has(s.dedupeKey));
+      const freshSoon = [];
+      for (const item of finishingSoon) {
+        if (!(await hasAlreadyNotified(row.user_id, item.dedupeKey))) {
+          freshSoon.push(item);
+        }
+      }
       if (freshSoon.length > 0) {
         freshSoon.forEach((s) => notifiedUpgradeKeys.add(s.dedupeKey));
         const firstSoon = freshSoon[0];
@@ -168,7 +209,8 @@ export const runBackgroundSyncNow = async ({
           type: 'builder_soon',
           data: {
             player_tag: row.player_tag,
-            player_name: row.player_name
+            player_name: row.player_name,
+            dedupe_keys: freshSoon.map((s) => s.dedupeKey)
           }
         });
         cycleNotifications++;

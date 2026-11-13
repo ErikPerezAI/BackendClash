@@ -10,6 +10,12 @@ const notificationsStore = new Map();
 const pushTokensStore = new Map();
 const hydratedUsers = new Set();
 
+const normalizePushToken = (token) => {
+  if (typeof token !== 'string') return null;
+  const trimmed = token.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 /**
  * Hidrata las notificaciones y el token push del usuario desde user_metadata de Supabase
  */
@@ -24,9 +30,10 @@ const hydrateUserFromSupabase = async (userId) => {
     if (error || !data?.user) return;
 
     const meta = data.user.user_metadata || {};
-    if (meta.expo_push_token && !pushTokensStore.has(userId)) {
+    const savedToken = normalizePushToken(meta.expo_push_token);
+    if (savedToken && !pushTokensStore.has(userId)) {
       pushTokensStore.set(userId, {
-        token: meta.expo_push_token,
+        token: savedToken,
         platform: meta.push_platform || 'mobile',
         updated_at: meta.push_updated_at || new Date().toISOString()
       });
@@ -55,13 +62,9 @@ const persistUserToSupabase = async (userId) => {
     await supabaseAdmin.auth.admin.updateUserById(userId, {
       user_metadata: {
         ...currentMeta,
-        ...(tokenEntry
-          ? {
-              expo_push_token: tokenEntry.token,
-              push_platform: tokenEntry.platform,
-              push_updated_at: tokenEntry.updated_at
-            }
-          : {}),
+        expo_push_token: tokenEntry ? tokenEntry.token : null,
+        push_platform: tokenEntry ? tokenEntry.platform : null,
+        push_updated_at: tokenEntry ? tokenEntry.updated_at : null,
         recent_notifications: list
       }
     });
@@ -71,14 +74,67 @@ const persistUserToSupabase = async (userId) => {
 };
 
 /**
- * Registra un Expo Push Token para el usuario autenticado
+ * Desvincula un mismo Expo Push Token de cualquier otra cuenta para evitar fugas entre usuarios en un mismo dispositivo
+ */
+const clearTokenFromOtherUsers = async (ownerUserId, normalizedToken) => {
+  if (!normalizedToken) return;
+
+  for (const [otherUserId, existingEntry] of pushTokensStore.entries()) {
+    if (otherUserId !== ownerUserId && normalizePushToken(existingEntry?.token) === normalizedToken) {
+      pushTokensStore.delete(otherUserId);
+    }
+  }
+
+  if (!supabaseAdmin) return;
+
+  try {
+    const perPage = 1000;
+    for (let page = 1; page <= 10; page++) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+      if (error || !Array.isArray(data?.users) || data.users.length === 0) {
+        break;
+      }
+
+      const conflictingUsers = data.users.filter(
+        (u) =>
+          u.id !== ownerUserId &&
+          normalizePushToken(u.user_metadata?.expo_push_token) === normalizedToken
+      );
+
+      for (const conflictUser of conflictingUsers) {
+        pushTokensStore.delete(conflictUser.id);
+        hydratedUsers.add(conflictUser.id);
+        await supabaseAdmin.auth.admin.updateUserById(conflictUser.id, {
+          user_metadata: {
+            ...(conflictUser.user_metadata || {}),
+            expo_push_token: null,
+            push_platform: null,
+            push_updated_at: null
+          }
+        });
+      }
+
+      if (data.users.length < perPage) {
+        break;
+      }
+    }
+  } catch (err) {
+    console.warn('[NotificationService] No se pudo limpiar token duplicado en otros usuarios:', err.message);
+  }
+};
+
+/**
+ * Registra un Expo Push Token para el usuario autenticado (exclusivo por dispositivo/cuenta)
  */
 export const registerUserPushToken = async (userId, expoPushToken, platform = 'mobile') => {
-  if (!userId || !expoPushToken) return null;
+  const normalizedToken = normalizePushToken(expoPushToken);
+  if (!userId || !normalizedToken) return null;
+
   await hydrateUserFromSupabase(userId);
+  await clearTokenFromOtherUsers(userId, normalizedToken);
 
   const entry = {
-    token: String(expoPushToken).trim(),
+    token: normalizedToken,
     platform,
     updated_at: new Date().toISOString()
   };
@@ -86,6 +142,29 @@ export const registerUserPushToken = async (userId, expoPushToken, platform = 'm
   pushTokensStore.set(userId, entry);
   await persistUserToSupabase(userId);
   return entry;
+};
+
+/**
+ * Desvincula el Expo Push Token de una cuenta (p. ej. al cerrar sesión)
+ */
+export const unregisterUserPushToken = async (userId, optionalToken = null) => {
+  if (!userId) return { cleared: false };
+  await hydrateUserFromSupabase(userId);
+
+  const normalizedOptional = normalizePushToken(optionalToken);
+  const currentEntry = pushTokensStore.get(userId);
+  const shouldClear =
+    !normalizedOptional ||
+    !currentEntry?.token ||
+    normalizePushToken(currentEntry.token) === normalizedOptional;
+
+  if (!shouldClear) {
+    return { cleared: false, reason: 'token_mismatch' };
+  }
+
+  pushTokensStore.delete(userId);
+  await persistUserToSupabase(userId);
+  return { cleared: true };
 };
 
 /**
@@ -159,6 +238,11 @@ export const createAndSendNotification = async ({
 
   await hydrateUserFromSupabase(userId);
 
+  const enrichedData = {
+    ...(data || {}),
+    target_user_id: String(userId)
+  };
+
   const currentList = notificationsStore.get(userId) || [];
   const newNotification = {
     id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -166,7 +250,7 @@ export const createAndSendNotification = async ({
     title: String(title).trim(),
     body: String(body).trim(),
     type,
-    data: data || {},
+    data: enrichedData,
     read: false,
     created_at: new Date().toISOString()
   };
@@ -185,7 +269,7 @@ export const createAndSendNotification = async ({
       data: {
         notificationId: newNotification.id,
         type,
-        ...data
+        ...enrichedData
       }
     });
   }
@@ -246,6 +330,7 @@ export const markNotificationsAsRead = async (userId, notificationId = null) => 
 
 export default {
   registerUserPushToken,
+  unregisterUserPushToken,
   getUserPushToken,
   sendExpoPushMessage,
   createAndSendNotification,

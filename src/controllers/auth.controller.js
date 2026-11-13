@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { supabaseClient, supabaseAdmin } from '../config/supabase.js';
 import { getResetPasswordHtml } from '../utils/resetPasswordHtml.js';
+import { unregisterUserPushToken } from '../services/notification.service.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -395,20 +396,179 @@ export const resetPassword = async (req, res, next) => {
   }
 };
 
+const OAUTH_REDIRECT_COOKIE = 'ct_oauth_redirect_to';
+const OAUTH_REDIRECT_TTL_MS = 10 * 60 * 1000;
+const recentOAuthRedirectsByIp = new Map();
+
+const getPublicOrigin = (req) => {
+  const protocol = req.headers['x-forwarded-proto']?.split(',')[0]?.trim() || req.protocol || 'https';
+  const host =
+    req.headers['x-forwarded-host']?.split(',')[0]?.trim() ||
+    req.get?.('host') ||
+    req.headers?.host;
+  return `${protocol}://${host}`;
+};
+
+const sanitizeAppRedirectUri = (rawUri) => {
+  const fallback = 'clashtactics://google-auth';
+  if (typeof rawUri !== 'string') return fallback;
+  const trimmed = rawUri.trim();
+  if (!trimmed) return fallback;
+
+  if (/^(clashtactics|exp|exps):\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+};
+
+const parseCookieValue = (req, name) => {
+  const cookieHeader = req.headers?.cookie;
+  if (!cookieHeader || typeof cookieHeader !== 'string') return null;
+
+  const parts = cookieHeader.split(';');
+  for (const part of parts) {
+    const eqIndex = part.indexOf('=');
+    if (eqIndex <= 0) continue;
+    const key = part.slice(0, eqIndex).trim();
+    if (key === name) {
+      try {
+        return decodeURIComponent(part.slice(eqIndex + 1).trim());
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+};
+
+const getClientIpKey = (req) => {
+  const fwd = req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+  return fwd || req.ip || req.socket?.remoteAddress || 'unknown';
+};
+
+const rememberOAuthRedirect = (req, res, redirectTo) => {
+  const isHttps = (req.headers['x-forwarded-proto']?.split(',')[0]?.trim() || req.protocol) === 'https';
+  const cookieFlags = [
+    `${OAUTH_REDIRECT_COOKIE}=${encodeURIComponent(redirectTo)}`,
+    'Path=/',
+    'Max-Age=600',
+    'SameSite=Lax',
+    'HttpOnly'
+  ];
+  if (isHttps) {
+    cookieFlags.push('Secure');
+  }
+  res.setHeader('Set-Cookie', cookieFlags.join('; '));
+
+  const now = Date.now();
+  for (const [k, entry] of recentOAuthRedirectsByIp.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      recentOAuthRedirectsByIp.delete(k);
+    }
+  }
+  recentOAuthRedirectsByIp.set(getClientIpKey(req), {
+    redirectTo,
+    expiresAt: now + OAUTH_REDIRECT_TTL_MS
+  });
+};
+
+const resolveStoredOAuthRedirect = (req) => {
+  const fromQuery = typeof req.query?.app_redirect === 'string' ? req.query.app_redirect : null;
+  if (fromQuery) {
+    return sanitizeAppRedirectUri(fromQuery);
+  }
+
+  const fromCookie = parseCookieValue(req, OAUTH_REDIRECT_COOKIE);
+  if (fromCookie) {
+    return sanitizeAppRedirectUri(fromCookie);
+  }
+
+  const ipEntry = recentOAuthRedirectsByIp.get(getClientIpKey(req));
+  if (ipEntry && ipEntry.expiresAt > Date.now()) {
+    return sanitizeAppRedirectUri(ipEntry.redirectTo);
+  }
+
+  return 'clashtactics://google-auth';
+};
+
+/**
+ * Sirve la página raíz inteligente (retorna tokens OAuth de Google hacia la app sin mostrar restablecimiento de contraseña)
+ */
+export const serveAuthLandingPage = (req, res) => {
+  const oauthRedirectUrl = resolveStoredOAuthRedirect(req);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(
+    getResetPasswordHtml({
+      defaultMode: 'landing',
+      oauthRedirectUrl
+    })
+  );
+};
+
 /**
  * Sirve la página web HTML interactiva para restablecer contraseña
  */
 export const serveResetPasswordPage = (req, res) => {
+  const oauthRedirectUrl = resolveStoredOAuthRedirect(req);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.status(200).send(getResetPasswordHtml());
+  res.status(200).send(
+    getResetPasswordHtml({
+      defaultMode: 'recovery',
+      oauthRedirectUrl
+    })
+  );
 };
 
 /**
- * Obtener la URL de autorización para iniciar sesión con Google mediante Supabase OAuth
+ * Inicia el flujo OAuth con Google guardando la URL exacta de retorno a la app (Expo Go o APK)
+ * y redirigiendo a Supabase OAuth para poder regresar automáticamente si Supabase cae en Site URL.
+ */
+export const startGoogleOAuth = async (req, res, next) => {
+  try {
+    const redirectTo = sanitizeAppRedirectUri(req.query.redirect_to);
+    const { data, error } = await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent'
+        },
+        skipBrowserRedirect: true
+      }
+    });
+
+    if (error || !data?.url) {
+      const sep = redirectTo.includes('?') ? '&' : '?';
+      const errDesc = encodeURIComponent(
+        error?.message || 'No se pudo iniciar sesión con Google en Supabase.'
+      );
+      return res.redirect(302, `${redirectTo}${sep}error=google_oauth_error&error_description=${errDesc}`);
+    }
+
+    rememberOAuthRedirect(req, res, redirectTo);
+    return res.redirect(302, data.url);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Obtener la URL de autorización para iniciar sesión con Google mediante el puente OAuth del backend
  */
 export const getGoogleOAuthUrl = async (req, res, next) => {
   try {
-    const redirectTo = req.query.redirect_to || 'clashtactics://google-auth';
+    const redirectTo = sanitizeAppRedirectUri(req.query.redirect_to);
     const { data, error } = await supabaseClient.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -435,8 +595,12 @@ export const getGoogleOAuthUrl = async (req, res, next) => {
       });
     }
 
+    const origin = getPublicOrigin(req);
+    const bridgeStartUrl = `${origin}/api/auth/google-start?redirect_to=${encodeURIComponent(redirectTo)}`;
+
     res.status(200).json({
-      url: data.url
+      url: bridgeStartUrl,
+      direct_url: data.url
     });
   } catch (error) {
     next(error);
@@ -654,6 +818,10 @@ export const getMe = async (req, res, next) => {
  */
 export const logout = async (req, res, next) => {
   try {
+    if (req.user?.id) {
+      const token = req.body?.expo_push_token || req.body?.token || null;
+      await unregisterUserPushToken(req.user.id, token).catch(() => {});
+    }
     if (req.supabase) {
       await req.supabase.auth.signOut();
     }

@@ -6,6 +6,7 @@ import {
   resetPassword,
   serveResetPasswordPage,
   getGoogleOAuthUrl,
+  startGoogleOAuth,
   oauthCallback,
   changePassword,
   getMe,
@@ -21,6 +22,7 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.get('/reset-password', serveResetPasswordPage);
 router.get('/google-url', getGoogleOAuthUrl);
+router.get('/google-start', startGoogleOAuth);
 router.post('/google-callback', oauthCallback);
 router.post('/oauth-callback', oauthCallback);
 router.put('/change-password', requireAuth, changePassword);

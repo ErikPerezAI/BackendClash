@@ -2,7 +2,8 @@ import {
   createAndSendNotification,
   getUserNotifications,
   markNotificationsAsRead,
-  registerUserPushToken
+  registerUserPushToken,
+  unregisterUserPushToken
 } from '../services/notification.service.js';
 import {
   getBackgroundWorkerStatus,
@@ -49,6 +50,24 @@ export const registerPushToken = async (req, res, next) => {
     res.status(200).json({
       message: 'Token de notificaciones push registrado exitosamente',
       push_token: saved
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Desvincular el Expo Push Token del usuario autenticado (p. ej. al cerrar sesión)
+ * DELETE /api/notifications/register-token | POST /api/notifications/unregister-token
+ */
+export const unregisterPushToken = async (req, res, next) => {
+  try {
+    const rawToken = req.body?.token ?? req.query?.token ?? null;
+    const result = await unregisterUserPushToken(req.user.id, rawToken);
+
+    res.status(200).json({
+      message: 'Token de notificaciones desvinculado de esta cuenta',
+      ...result
     });
   } catch (error) {
     next(error);

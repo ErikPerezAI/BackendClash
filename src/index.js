@@ -9,7 +9,7 @@ import favoriteRoutes from './routes/favorite.routes.js';
 import postRoutes from './routes/post.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
-import { serveResetPasswordPage } from './controllers/auth.controller.js';
+import { serveAuthLandingPage, serveResetPasswordPage } from './controllers/auth.controller.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { startBackgroundWorker } from './services/backgroundWorker.service.js';
 import { getOutboundIp, getSupercellMode } from './services/supercell.service.js';
@@ -27,8 +27,8 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Página web de restablecimiento de contraseña y bienvenida
-app.get('/', serveResetPasswordPage);
+// Página web de redirección OAuth, bienvenida y restablecimiento de contraseña
+app.get('/', serveAuthLandingPage);
 app.get('/reset-password', serveResetPasswordPage);
 
 // Endpoint de Health Check
