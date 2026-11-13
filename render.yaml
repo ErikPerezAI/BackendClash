@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: clashtactics-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COC_API_BASE_URL
+        value: https://cocproxy.royaleapi.dev/v1
+      - key: COC_API_PROXY_BASE_URL
+        value: https://cocproxy.royaleapi.dev/v1
+      - key: COC_API_TIMEOUT_MS
+        value: "12000"
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-3.8-flash
+      - key: COC_API_KEY
+        sync: false
+      - key: COC_PROXY_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

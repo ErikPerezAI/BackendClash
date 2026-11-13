@@ -1,0 +1,900 @@
+### =========================================================================
+### BACKEND CLASHTACTICS - HTTP REQUESTS TEST SUITE
+### Compatible con la extensión "REST Client" de VS Code / Cursor
+### =========================================================================
+
+@baseUrl = http://localhost:3000/api
+
+# ---------------------------------------------------------------------------
+# TOKEN DE AUTENTICACIÓN
+# Al hacer Login (Paso 2), copia el access_token recibido y pégalo aquí:
+# ---------------------------------------------------------------------------
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6ImJjMjU2ZDI0LTg5NGItNDk3NC04OTllLTRjM2VkMzk5OWUzZiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2ZncWFmYWxzdnF1b2JkanlzdXlqLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlMzZlNTdkYi1hNzNjLTRhN2MtYWE1YS02ZjA4N2E1MzY0ZTMiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzkxODMyMjE5LCJpYXQiOjE3OTE4Mjg2MTksImVtYWlsIjoiZXJpYzIwN0BnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2FwaS5kaWNlYmVhci5jb20vNy54L2JvdHR0cy9zdmc_c2VlZD1Fcmlja0NsYXNoZXIiLCJlbWFpbCI6ImVyaWMyMDdAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiZTM2ZTU3ZGItYTczYy00YTdjLWFhNWEtNmYwODdhNTM2NGUzIiwidXNlcm5hbWUiOiJFcmlrOTIxIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3OTE4Mjg2MTl9XSwic2Vzc2lvbl9pZCI6ImRjYjFiYmNhLTg1ZDctNDRiMC1hMjRjLTBlMGU2NGI3NjYyYSIsImlzX2Fub255bW91cyI6ZmFsc2V9.hOt59abYcD6YfX8FFBse5T6rMapgO1QsfADbaL3iOk9mMDBJWlLjdXIZffygOEZpx9Vqn9w_z2Gts7oSI-HHJA
+# ---------------------------------------------------------------------------
+# IDs DE RECURSOS PARA PRUEBAS (Copia los IDs retornados al crear recursos)
+# ---------------------------------------------------------------------------
+@myUserId = 0ef29649-92ec-4f38-bd19-27204210fafc
+@postId = 115fdf5d-d924-4d39-a07e-eb279b40d181
+@favoriteId = 17af50d4-816a-478d-b0c6-e09a2d0e048b
+@commentId = 2078fdc4-0626-4d19-a538-19579d135e38
+
+# Tags de prueba de Clash of Clans
+@playerTag = %23Y8J8RPVJU
+@clanTag = %232YQVGPU8C
+@invalidTag = %23INVALID999
+
+
+# ===========================================================================
+# 0. HEALTH CHECK
+# ===========================================================================
+
+### 0.1 Health check del servidor
+GET {{baseUrl}}/health
+
+
+# ===========================================================================
+# 1. AUTENTICACIÓN Y REGISTRO (auth.users + public.profiles)
+# NOTA: Al registrarse, el trigger de Supabase `handle_new_user` inserta
+# automáticamente el registro en la tabla `public.profiles`.
+# ===========================================================================
+
+### 1.1 Registrar nuevo usuario
+# Si en tu panel de Supabase tienes "Confirm email" desactivado,
+# la respuesta incluirá inmediatamente el `access_token` de sesión.
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "eric207@gmail.com",
+  "password": "123456",
+  "username": "Erik921",
+  "avatar_url": "https://api.dicebear.com/7.x/bottts/svg?seed=ErickClasher"
+}
+
+### 1.2 Iniciar sesión (Login)
+# Copia el `access_token` de la respuesta y pégalo arriba en @authToken
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "eric207@gmail.com",
+  "password": "123456"
+}
+
+### 1.3 Obtener información del usuario autenticado actual (/auth/me)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{authToken}}
+
+### 1.4 Cerrar sesión (/auth/logout)
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{authToken}}
+
+
+# ===========================================================================
+# 2. PERFILES (public.profiles)
+# ===========================================================================
+
+### 2.1 Obtener mi propio perfil
+GET {{baseUrl}}/profiles/me
+Authorization: Bearer {{authToken}}
+
+### 2.2 Actualizar mi perfil (nombre de usuario, avatar o player_tag)
+PUT {{baseUrl}}/profiles/me
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "username": "ErickClasherPro",
+  "avatar_url": "https://api.dicebear.com/7.x/bottts/svg?seed=ClashKing"
+}
+
+### 2.3 Listar perfiles públicos (con paginación opcional)
+GET {{baseUrl}}/profiles?limit=10&offset=0
+
+### 2.4 Buscar perfiles por nombre de usuario
+GET {{baseUrl}}/profiles?search=ErickClasherPro
+
+### 2.5 Obtener un perfil específico por ID (UUID) o por username
+GET {{baseUrl}}/profiles/ErickClasherPro
+
+
+# ===========================================================================
+# 3. CLASH OF CLANS API (Consultas oficiales completas con Supercell API)
+# ===========================================================================
+
+# --- 3.A JUGADORES ---
+### 3.1 Consultar Jugador por Tag (Toda la info: tropas, héroes, equipamiento, copas)
+GET {{baseUrl}}/coc/player/{{playerTag}}
+
+### 3.2 Consultar Jugador sin símbolo # (el backend lo normaliza automáticamente)
+GET {{baseUrl}}/coc/player/228LYJPY8
+
+# --- 3.B CLANES ---
+### 3.3 Buscar Clanes con Filtros (por nombre, miembros, nivel, etc.)
+GET {{baseUrl}}/coc/clans?name=Latin&minMembers=10&limit=10
+
+### 3.4 Consultar Clan por Tag (Dashboard Completo Unificado)
+# Devuelve en una sola respuesta: datos del clan, miembros con roles,
+# guerra actual, historial de guerras (con fallback seguro si es privado),
+# asaltos de capital, grupo CWL y si es favorito del usuario actual.
+GET {{baseUrl}}/coc/clan/{{clanTag}}
+
+### 3.4B Consultar Clan por Tag con Sesión Activa (Muestra is_favorite contextual para mi usuario)
+GET {{baseUrl}}/coc/clan/{{clanTag}}
+Authorization: Bearer {{authToken}}
+
+### 3.4C Alternar Clan en Favoritos (Toggle: Agrega si no está, Elimina si ya existe)
+# Guarda el clan en public.favorites asociado a mi usuario (aislado por RLS)
+POST {{baseUrl}}/coc/clan/{{clanTag}}/favorite
+Authorization: Bearer {{authToken}}
+
+### 3.4D Consultar Clan básico (sin agregación masiva, vía ?raw=true)
+GET {{baseUrl}}/coc/clan/{{clanTag}}?raw=true
+
+### 3.5 Consultar Lista de Miembros de un Clan
+GET {{baseUrl}}/coc/clan/{{clanTag}}/members?limit=20
+
+### 3.6 Consultar Historial de Guerras (War Log) de un Clan (si es público)
+GET {{baseUrl}}/coc/clan/{{clanTag}}/warlog?limit=10
+
+### 3.7 Consultar Guerra Actual (Current War) de un Clan
+GET {{baseUrl}}/coc/clan/{{clanTag}}/currentwar
+
+### 3.8 Consultar Grupo de Liga de Guerras (CWL) de un Clan
+GET {{baseUrl}}/coc/clan/{{clanTag}}/leaguegroup
+
+### 3.9 Consultar Temporadas de Asaltos de Capital de un Clan
+GET {{baseUrl}}/coc/clan/{{clanTag}}/capitalraids?limit=5
+
+# --- 3.C RANKINGS / LEADERBOARDS ---
+### 3.10 Listar Países y Ubicaciones disponibles
+GET {{baseUrl}}/coc/locations?limit=20
+
+### 3.11 Ranking Global de Mejores Clanes
+GET {{baseUrl}}/coc/rankings/clans/global?limit=20
+
+### 3.12 Ranking Global de Mejores Jugadores
+GET {{baseUrl}}/coc/rankings/players/global?limit=20
+
+### 3.13 Ranking Global de Clanes en la Base del Constructor
+GET {{baseUrl}}/coc/rankings/clans-builder-base/global?limit=20
+
+### 3.14 Ranking Global de Jugadores en la Base del Constructor
+GET {{baseUrl}}/coc/rankings/players-builder-base/global?limit=20
+
+### 3.15 Ranking Global de Capitales de Clan
+GET {{baseUrl}}/coc/rankings/capitals/global?limit=20
+
+# --- 3.D LIGAS ---
+### 3.16 Listar Ligas Normales (Bronce hasta Leyenda)
+GET {{baseUrl}}/coc/leagues
+
+### 3.17 Listar Ligas de Guerra de Clanes (CWL)
+GET {{baseUrl}}/coc/warleagues
+
+### 3.18 Listar Ligas de la Base del Constructor
+GET {{baseUrl}}/coc/builderbaseleagues
+
+### 3.19 Listar Ligas de la Capital
+GET {{baseUrl}}/coc/capitalleagues
+
+# --- 3.E ETIQUETAS (LABELS) ---
+### 3.20 Listar Etiquetas de Clanes (Farming, Clan Wars, etc.)
+GET {{baseUrl}}/coc/labels/clans
+
+### 3.21 Listar Etiquetas de Jugadores
+GET {{baseUrl}}/coc/labels/players
+
+# --- 3.F PASE DE ORO (GOLD PASS) ---
+### 3.22 Consultar Temporada Actual del Pase de Oro
+GET {{baseUrl}}/coc/goldpass/current
+
+# --- 3.G MANEJO DE ERRORES ---
+### 3.23 Consultar Tag inexistente (Prueba de error 404)
+GET {{baseUrl}}/coc/player/{{invalidTag}}
+
+
+# --- 3.H CLAIMEADO DE ALDEAS Y TRACKER DE ESTRUCTURAS (Village Tracker) ---
+
+### 3.24 Claimear Jugador con API Token del Juego
+# Requiere Authorization Bearer token de tu usuario logueado en ClashTactics.
+# El 'token' se obtiene en Clash of Clans: Ajustes > Más ajustes > Token de API.
+POST {{baseUrl}}/coc/player/{{playerTag}}/claim
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "token": "zwwjndch"
+}
+
+### 3.25 [PRUEBA ERROR] Intentar claimear con Token inválido (Esperado: HTTP 400)
+POST {{baseUrl}}/coc/player/{{playerTag}}/claim
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "token": "token_invalido_de_prueba_123"
+}
+
+### 3.26 Listar todas mis Aldeas Claimeadas (Solo visibles para mi usuario)
+GET {{baseUrl}}/coc/claimed-players
+Authorization: Bearer {{authToken}}
+
+### 3.27 Importar JSON Nativo Completo de Clash of Clans (Ajustes > Más ajustes > Exportar datos)
+# Soporta el JSON oficial completo con edificios, muros, trampas, héroes, laboratorio, mascotas y base del constructor.
+POST {{baseUrl}}/coc/player/{{playerTag}}/village-data
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "villageData": {
+    "tag": "#Y8J8RPVJU",
+    "timestamp": 1791771234,
+    "helpers": [
+      { "data": 93000000, "lvl": 3, "helper_cooldown": 43017 },
+      { "data": 93000001, "lvl": 1, "helper_cooldown": 43017 },
+      { "data": 93000002, "lvl": 2, "helper_cooldown": 43017 }
+    ],
+    "guardians": [
+      { "data": 107000000, "lvl": 4, "timer": 204492, "helper_timer": 0 },
+      { "data": 107000001, "lvl": 1 },
+      { "data": 107000008, "lvl": 5 }
+    ],
+    "buildings": [
+      { "data": 1000013, "lvl": 18, "gear_up": 1 },
+      { "data": 1000097, "types": [
+        { "data": 103000011, "modules": [{ "data": 102000033, "lvl": 1 }, { "data": 102000034, "lvl": 1 }, { "data": 102000035, "lvl": 1 }] },
+        { "data": 103000012, "modules": [{ "data": 102000036, "lvl": 1 }, { "data": 102000037, "lvl": 1 }, { "data": 102000038, "lvl": 1 }] },
+        { "data": 103000013, "modules": [{ "data": 102000039, "lvl": 9, "timer": 131544 }, { "data": 102000040, "lvl": 8 }, { "data": 102000041, "lvl": 10 }] }
+      ]},
+      { "data": 1000000, "lvl": 14, "cnt": 4 },
+      { "data": 1000001, "lvl": 18, "cnt": 1 },
+      { "data": 1000002, "lvl": 16, "cnt": 7 },
+      { "data": 1000003, "lvl": 19, "cnt": 4 },
+      { "data": 1000004, "lvl": 16, "cnt": 7 },
+      { "data": 1000005, "lvl": 19, "cnt": 4 },
+      { "data": 1000006, "lvl": 19, "cnt": 1 },
+      { "data": 1000007, "lvl": 16, "cnt": 1 },
+      { "data": 1000009, "lvl": 21, "cnt": 2 },
+      { "data": 1000010, "lvl": 19, "cnt": 325 },
+      { "data": 1000011, "lvl": 17, "cnt": 2 },
+      { "data": 1000012, "lvl": 16, "cnt": 4 },
+      { "data": 1000013, "lvl": 18, "cnt": 3 },
+      { "data": 1000014, "lvl": 14, "cnt": 1 },
+      { "data": 1000015, "lvl": 8, "cnt": 5 },
+      { "data": 1000019, "lvl": 17, "cnt": 5 },
+      { "data": 1000020, "lvl": 9, "cnt": 1 },
+      { "data": 1000021, "lvl": 13, "cnt": 4 },
+      { "data": 1000023, "lvl": 10, "cnt": 3 },
+      { "data": 1000024, "lvl": 13, "cnt": 1 },
+      { "data": 1000026, "lvl": 13, "cnt": 1 },
+      { "data": 1000027, "lvl": 12, "cnt": 3 },
+      { "data": 1000028, "lvl": 7, "cnt": 2 },
+      { "data": 1000029, "lvl": 8, "cnt": 1 },
+      { "data": 1000032, "lvl": 13, "cnt": 2 },
+      { "data": 1000059, "lvl": 9, "cnt": 1 },
+      { "data": 1000064, "lvl": 1, "cnt": 1 },
+      { "data": 1000067, "lvl": 7, "cnt": 2 },
+      { "data": 1000068, "lvl": 12, "cnt": 1 },
+      { "data": 1000070, "lvl": 10, "cnt": 1 },
+      { "data": 1000071, "lvl": 12, "cnt": 1 },
+      { "data": 1000072, "lvl": 3, "cnt": 2 },
+      { "data": 1000077, "lvl": 5, "cnt": 1 },
+      { "data": 1000079, "lvl": 3, "cnt": 1 },
+      { "data": 1000084, "lvl": 4, "cnt": 3 },
+      { "data": 1000085, "lvl": 4, "cnt": 3 },
+      { "data": 1000086, "lvl": 2, "cnt": 1 },
+      { "data": 1000089, "lvl": 3, "cnt": 2 },
+      { "data": 1000093, "lvl": 1, "cnt": 1 },
+      { "data": 1000102, "lvl": 2, "cnt": 2 }
+    ],
+    "traps": [
+      { "data": 12000001, "lvl": 12, "timer": 926073 },
+      { "data": 12000001, "lvl": 11, "timer": 233274 },
+      { "data": 12000005, "lvl": 5, "timer": 27731 },
+      { "data": 12000000, "lvl": 10, "cnt": 7 },
+      { "data": 12000000, "lvl": 12, "cnt": 1 },
+      { "data": 12000001, "lvl": 12, "cnt": 7 },
+      { "data": 12000002, "lvl": 12, "cnt": 8 },
+      { "data": 12000005, "lvl": 10, "cnt": 2 },
+      { "data": 12000005, "lvl": 11, "cnt": 5 },
+      { "data": 12000006, "lvl": 3, "cnt": 1 },
+      { "data": 12000006, "lvl": 4, "cnt": 5 },
+      { "data": 12000006, "lvl": 5, "cnt": 3 },
+      { "data": 12000008, "lvl": 4, "cnt": 2 },
+      { "data": 12000008, "lvl": 5, "cnt": 2 },
+      { "data": 12000016, "lvl": 3, "cnt": 1 },
+      { "data": 12000020, "lvl": 4, "cnt": 1 }
+    ],
+    "units": [
+      { "data": 4000000, "lvl": 12 }, { "data": 4000001, "lvl": 14 }, { "data": 4000002, "lvl": 9 }, { "data": 4000003, "lvl": 10 },
+      { "data": 4000004, "lvl": 14 }, { "data": 4000005, "lvl": 13 }, { "data": 4000006, "lvl": 13 }, { "data": 4000007, "lvl": 11 },
+      { "data": 4000008, "lvl": 13 }, { "data": 4000009, "lvl": 9 }, { "data": 4000010, "lvl": 12 }, { "data": 4000011, "lvl": 12 },
+      { "data": 4000012, "lvl": 12 }, { "data": 4000013, "lvl": 11 }, { "data": 4000015, "lvl": 5 }, { "data": 4000017, "lvl": 6 },
+      { "data": 4000022, "lvl": 10 }, { "data": 4000023, "lvl": 12 }, { "data": 4000024, "lvl": 9 }, { "data": 4000053, "lvl": 8 },
+      { "data": 4000058, "lvl": 9 }, { "data": 4000059, "lvl": 9 }, { "data": 4000065, "lvl": 6 }, { "data": 4000082, "lvl": 3 },
+      { "data": 4000095, "lvl": 4 }, { "data": 4000097, "lvl": 4 }, { "data": 4000109, "lvl": 1 }, { "data": 4000110, "lvl": 3 },
+      { "data": 4000123, "lvl": 3 }, { "data": 4000132, "lvl": 4 }, { "data": 4000150, "lvl": 3 }, { "data": 4000177, "lvl": 3 }
+    ],
+    "siege_machines": [
+      { "data": 4000051, "lvl": 4 }, { "data": 4000052, "lvl": 5 }, { "data": 4000062, "lvl": 5 }, { "data": 4000075, "lvl": 4 },
+      { "data": 4000087, "lvl": 4 }, { "data": 4000091, "lvl": 3 }, { "data": 4000092, "lvl": 1 }, { "data": 4000135, "lvl": 4 },
+      { "data": 4000188, "lvl": 1 }
+    ],
+    "heroes": [
+      { "data": 28000000, "lvl": 110 }, { "data": 28000001, "lvl": 110 }, { "data": 28000002, "lvl": 85 },
+      { "data": 28000004, "lvl": 55 }, { "data": 28000006, "lvl": 76, "timer": 632516 }, { "data": 28000007, "lvl": 25 }
+    ],
+    "spells": [
+      { "data": 26000000, "lvl": 10 }, { "data": 26000001, "lvl": 8 }, { "data": 26000002, "lvl": 7 }, { "data": 26000003, "lvl": 4 },
+      { "data": 26000005, "lvl": 8 }, { "data": 26000009, "lvl": 11 }, { "data": 26000010, "lvl": 8 }, { "data": 26000011, "lvl": 5 },
+      { "data": 26000016, "lvl": 8 }, { "data": 26000017, "lvl": 6 }, { "data": 26000028, "lvl": 5 }, { "data": 26000035, "lvl": 4 },
+      { "data": 26000053, "lvl": 3 }, { "data": 26000070, "lvl": 5 }, { "data": 26000098, "lvl": 5 }, { "data": 26000109, "lvl": 3, "timer": 113029, "helper_recurrent": true },
+      { "data": 26000120, "lvl": 4 }, { "data": 26000123, "lvl": 1 }
+    ],
+    "pets": [
+      { "data": 73000000, "lvl": 2 }, { "data": 73000001, "lvl": 2 }, { "data": 73000002, "lvl": 11 }, { "data": 73000003, "lvl": 12 },
+      { "data": 73000004, "lvl": 10 }, { "data": 73000007, "lvl": 12 }, { "data": 73000008, "lvl": 11, "timer": 350222 },
+      { "data": 73000009, "lvl": 15 }, { "data": 73000010, "lvl": 10 }, { "data": 73000011, "lvl": 10 }, { "data": 73000016, "lvl": 10 },
+      { "data": 73000017, "lvl": 1 }
+    ],
+    "equipment": [
+      { "data": 90000000, "lvl": 11 }, { "data": 90000001, "lvl": 14 }, { "data": 90000002, "lvl": 14 }, { "data": 90000003, "lvl": 14 },
+      { "data": 90000004, "lvl": 18 }, { "data": 90000005, "lvl": 18 }, { "data": 90000006, "lvl": 14 }, { "data": 90000007, "lvl": 14 },
+      { "data": 90000008, "lvl": 17 }, { "data": 90000009, "lvl": 4 }, { "data": 90000010, "lvl": 20 }, { "data": 90000011, "lvl": 5 },
+      { "data": 90000012, "lvl": 18 }, { "data": 90000013, "lvl": 20 }, { "data": 90000014, "lvl": 20 }, { "data": 90000015, "lvl": 17 },
+      { "data": 90000016, "lvl": 20 }, { "data": 90000017, "lvl": 18 }, { "data": 90000019, "lvl": 20 }, { "data": 90000020, "lvl": 17 },
+      { "data": 90000022, "lvl": 23 }, { "data": 90000024, "lvl": 18 }, { "data": 90000032, "lvl": 23 }, { "data": 90000034, "lvl": 18 },
+      { "data": 90000035, "lvl": 20 }, { "data": 90000039, "lvl": 23 }, { "data": 90000040, "lvl": 26 }, { "data": 90000041, "lvl": 2 },
+      { "data": 90000042, "lvl": 8 }, { "data": 90000043, "lvl": 18 }, { "data": 90000044, "lvl": 14 }, { "data": 90000047, "lvl": 2 },
+      { "data": 90000048, "lvl": 27 }, { "data": 90000049, "lvl": 17 }, { "data": 90000050, "lvl": 11 }, { "data": 90000051, "lvl": 2 },
+      { "data": 90000052, "lvl": 18 }, { "data": 90000053, "lvl": 23 }, { "data": 90000056, "lvl": 18 }, { "data": 90000057, "lvl": 1 },
+      { "data": 90000059, "lvl": 18 }, { "data": 90000060, "lvl": 27 }, { "data": 90000061, "lvl": 1 }
+    ],
+    "buildings2": [
+      { "data": 1000033, "lvl": 1, "cnt": 1 }, { "data": 1000033, "lvl": 4, "cnt": 57 }, { "data": 1000033, "lvl": 5, "cnt": 106 },
+      { "data": 1000033, "lvl": 6, "cnt": 8 }, { "data": 1000033, "lvl": 7, "cnt": 7 }, { "data": 1000033, "lvl": 10, "cnt": 1 },
+      { "data": 1000034, "lvl": 10, "cnt": 1 }, { "data": 1000035, "lvl": 10, "cnt": 3 }, { "data": 1000036, "lvl": 10, "cnt": 2 },
+      { "data": 1000037, "lvl": 10, "cnt": 3 }, { "data": 1000038, "lvl": 10, "cnt": 2 }, { "data": 1000039, "lvl": 10, "cnt": 1 },
+      { "data": 1000040, "lvl": 12, "cnt": 1 }, { "data": 1000041, "lvl": 6, "cnt": 2 }, { "data": 1000041, "lvl": 9, "cnt": 1 },
+      { "data": 1000042, "lvl": 1, "cnt": 6 }, { "data": 1000043, "lvl": 7, "cnt": 3 }, { "data": 1000044, "lvl": 8, "cnt": 2 },
+      { "data": 1000044, "lvl": 10, "cnt": 1 }, { "data": 1000045, "lvl": 10, "cnt": 1 }, { "data": 1000046, "lvl": 10, "cnt": 1 },
+      { "data": 1000048, "lvl": 6, "cnt": 1 }, { "data": 1000048, "lvl": 8, "cnt": 2 }, { "data": 1000049, "lvl": 1, "cnt": 2 },
+      { "data": 1000050, "lvl": 6, "cnt": 1 }, { "data": 1000050, "lvl": 7, "cnt": 1 }, { "data": 1000050, "lvl": 8, "cnt": 3 },
+      { "data": 1000051, "lvl": 7, "cnt": 1 }, { "data": 1000052, "lvl": 7, "cnt": 1 }, { "data": 1000053, "lvl": 1, "cnt": 1 },
+      { "data": 1000054, "lvl": 8, "cnt": 1 }, { "data": 1000055, "lvl": 7, "cnt": 2 }, { "data": 1000056, "lvl": 10, "cnt": 1 },
+      { "data": 1000057, "lvl": 7, "cnt": 1 }, { "data": 1000058, "lvl": 9, "cnt": 1 }, { "data": 1000063, "lvl": 4, "cnt": 1 },
+      { "data": 1000065, "lvl": 5, "cnt": 1 }, { "data": 1000078, "lvl": 5, "cnt": 1 }, { "data": 1000080, "lvl": 1, "cnt": 1 },
+      { "data": 1000081, "lvl": 3, "cnt": 1 }, { "data": 1000082, "lvl": 5, "cnt": 1 }
+    ],
+    "traps2": [
+      { "data": 12000010, "lvl": 4, "cnt": 4 }, { "data": 12000010, "lvl": 5, "cnt": 2 }, { "data": 12000011, "lvl": 3, "cnt": 2 },
+      { "data": 12000011, "lvl": 4, "cnt": 1 }, { "data": 12000011, "lvl": 5, "cnt": 1 }, { "data": 12000011, "lvl": 6, "cnt": 1 },
+      { "data": 12000013, "lvl": 7, "cnt": 2 }, { "data": 12000013, "lvl": 10, "cnt": 4 }, { "data": 12000014, "lvl": 8, "cnt": 2 },
+      { "data": 12000014, "lvl": 9, "cnt": 2 }
+    ],
+    "units2": [
+      { "data": 4000031, "lvl": 14 }, { "data": 4000032, "lvl": 13 }, { "data": 4000033, "lvl": 11 }, { "data": 4000034, "lvl": 13 },
+      { "data": 4000035, "lvl": 17 }, { "data": 4000036, "lvl": 20 }, { "data": 4000037, "lvl": 12 }, { "data": 4000038, "lvl": 13 },
+      { "data": 4000041, "lvl": 10 }, { "data": 4000042, "lvl": 18 }, { "data": 4000070, "lvl": 15 }, { "data": 4000106, "lvl": 19 }
+    ],
+    "heroes2": [
+      { "data": 28000003, "lvl": 35 }, { "data": 28000005, "lvl": 27 }
+    ]
+  }
+}
+
+### 3.28 Consultar el Tracker de la aldea claimeada (Estructuras, niveles e imágenes)
+GET {{baseUrl}}/coc/player/{{playerTag}}/tracker
+Authorization: Bearer {{authToken}}
+
+### 3.28B Consultar Historial Temporal de Snapshots para Gráficas (RF-07)
+# Devuelve la serie temporal ordenada con % de avance, TH, estructuras al máx y constructores activos
+GET {{baseUrl}}/coc/player/{{playerTag}}/history
+Authorization: Bearer {{authToken}}
+
+### 3.28C Consultar Historial limitando la cantidad de snapshots
+GET {{baseUrl}}/coc/player/{{playerTag}}/history?limit=10
+Authorization: Bearer {{authToken}}
+
+### 3.29 Consultar Jugador por Tag con sesión activa (debe mostrar is_claimed_by_me: true)
+GET {{baseUrl}}/coc/player/{{playerTag}}
+Authorization: Bearer {{authToken}}
+
+### 3.30 Desvincular / Desclaimear una aldea
+DELETE {{baseUrl}}/coc/player/{{playerTag}}/claim
+Authorization: Bearer {{authToken}}
+
+
+
+# ===========================================================================
+# 4. FAVORITOS (public.favorites)
+# Guarda clanes y jugadores seguidos por el usuario para acceso rápido.
+# NO tiene relación con las credenciales de Login ni con el perfil del usuario.
+# ===========================================================================
+
+### 4.1 Agregar Jugador a Favoritos (Solo enviando Tag)
+# El backend consulta automáticamente la API de Clash of Clans para obtener
+# el nombre real, copas, TH y nivel sin que tengas que escribirlos manualmente.
+POST {{baseUrl}}/favorites
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "type": "player",
+  "target_tag": "#228LYJPY8"
+}
+
+### 4.2 Agregar Clan a Favoritos (Solo enviando Tag)
+POST {{baseUrl}}/favorites
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "type": "clan",
+  "target_tag": "#2QRL92RY2"
+}
+
+### 4.3 Alternar Favorito (Toggle: Agrega si no está, Elimina si ya existe)
+# Ideal para el botón de estrella en el frontend
+POST {{baseUrl}}/favorites/toggle
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "type": "player",
+  "target_tag": "#Y8J8RPVJU"
+}
+
+### 4.4 Listar todos mis Favoritos
+GET {{baseUrl}}/favorites
+Authorization: Bearer {{authToken}}
+
+### 4.5 Filtrar mis Favoritos: SOLO JUGADORES
+GET {{baseUrl}}/favorites?type=player
+Authorization: Bearer {{authToken}}
+
+### 4.6 Filtrar mis Favoritos: SOLO CLANES
+GET {{baseUrl}}/favorites?type=clan
+Authorization: Bearer {{authToken}}
+
+### 4.7 Consultar Estadísticas en Vivo (LIVE) de un Favorito Guardado
+# Copia el "id" del favorito de la respuesta del paso 4.1 o 4.4 y colócalo en @favoriteId
+GET {{baseUrl}}/favorites/{{favoriteId}}/live
+Authorization: Bearer {{authToken}}
+
+### 4.8 Comprobar si un jugador ya está en mis favoritos
+GET {{baseUrl}}/favorites/check?type=player&target_tag=%23Y8J8RPVJU
+Authorization: Bearer {{authToken}}
+
+### 4.9 Eliminar un Favorito por ID (Reemplazar @favoriteId con el ID obtenido)
+DELETE {{baseUrl}}/favorites/{{favoriteId}}
+Authorization: Bearer {{authToken}}
+
+
+
+# ===========================================================================
+# 5. PUBLICACIONES DE LA COMUNIDAD (public.community_posts)
+# Publicación de diseños de aldeas y estrategias de ejércitos.
+# ===========================================================================
+
+### 5.1 Crear Publicación: Diseño de Aldea (Base Layout)
+# Copia el "id" retornado en la respuesta y pégalo arriba en @postId
+POST {{baseUrl}}/posts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "post_type": "base_layout",
+  "title": "Aldea Anti-3 Estrellas TH19 de Guerra",
+  "description": "Excelente base con compartimentos aislados contra montapuercos, dragones y supertropas. Probada en CWL.",
+  "town_hall_level": "TH19",
+  "category": "Guerra",
+  "image_url": "",
+  "deep_link": "https://link.clashofclans.com/es?action=OpenLayout&id=TH16%3AWB%3AAAAA",
+  "video_url": ""
+}
+
+### 5.2 Crear Publicación: Estrategia de Ejército (Army Strategy)
+POST {{baseUrl}}/posts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "post_type": "army_strategy",
+  "title": "Ataque con Super Arqueras y Dirigible TH15",
+  "description": "Estrategia infalible para asegurar 2 estrellas en subida y 3 en guerra.",
+  "town_hall_level": "TH15",
+  "category": "Subida",
+  "video_url": "https://www.youtube.com/watch?v=example",
+  "army_composition": {
+    "troops": [
+      { "name": "Super Archer", "count": 4, "housing": 48 },
+      { "name": "Healer", "count": 5, "housing": 70 },
+      { "name": "Root Rider", "count": 6, "housing": 120 }
+    ],
+    "spells": [
+      { "name": "Invisibility Spell", "count": 5 },
+      { "name": "Clone Spell", "count": 2 }
+    ],
+    "siege_machine": "Battle Blimp"
+  }
+}
+
+### 5.3 [MODERACIÓN IA] Crear Publicación con Insultos (Esperado: HTTP 400 - Rechazado)
+# Prueba la protección contra insultos, toxicidad y agravios personales
+POST {{baseUrl}}/posts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "post_type": "base_layout",
+  "title": "Son todos unos idiotas y este clan es una mierda",
+  "description": "Jugadores inútiles y basura que no saben atacar.",
+  "town_hall_level": "TH16",
+  "category": "Guerra"
+}
+
+### 5.4 [MODERACIÓN IA] Crear Publicación con Imagen Inapropiada/NSFW (Esperado: HTTP 400 - Rechazado)
+# Prueba la protección multimodal contra imágenes no aptas o para adultos
+POST {{baseUrl}}/posts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "post_type": "base_layout",
+  "title": "Aldea secreta con imagen prohibida [test_nsfw]",
+  "description": "Contenido que incumple las normas de la comunidad.",
+  "town_hall_level": "TH16",
+  "category": "Guerra",
+  "image_url": "https://example.com/nsfw-test.jpg"
+}
+
+### 5.5 Listar todas las Publicaciones (público, incluye autor, promedio de estrellas y total de comentarios)
+GET {{baseUrl}}/posts?limit=20&offset=0
+
+### 5.6 Filtrar Publicaciones por Nivel de Ayuntamiento y Categoría
+GET {{baseUrl}}/posts?town_hall_level=TH11&category=Guerra
+
+### 5.7 Filtrar Publicaciones por Tipo (ej. solo estrategias de ejército)
+GET {{baseUrl}}/posts?post_type=army_strategy
+
+### 5.8 Buscar Publicaciones por texto en el título
+GET {{baseUrl}}/posts?search=Anti-3
+
+### 5.9 Obtener Detalle de una Publicación por ID (incluye autor, comentarios y ratings)
+GET {{baseUrl}}/posts/{{postId}}
+
+### 5.10 Actualizar mi Publicación (Reemplaza @postId con tu publicación)
+PUT {{baseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "title": "Aldea Anti-3 Estrellas TH16 [ACTUALIZADA CWL]",
+  "description": "Modificados los trampas de resorte y bombas gigantes contra montapuercos.",
+  "category": "Guerra"
+}
+
+
+# ===========================================================================
+# 6. CALIFICACIONES CON ESTRELLAS (public.post_ratings)
+# Calificaciones del 1 al 5 por publicación con política Upsert
+# ===========================================================================
+
+### 6.1 Calificar una publicación con 5 estrellas
+POST {{baseUrl}}/posts/{{postId}}/ratings
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "stars": 5
+}
+
+### 6.2 Modificar calificación a 4 estrellas (comprueba que se actualiza el voto del mismo usuario)
+POST {{baseUrl}}/posts/{{postId}}/ratings
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "stars": 4
+}
+
+### 6.3 Ver todas las calificaciones y el promedio de una publicación
+GET {{baseUrl}}/posts/{{postId}}/ratings
+
+
+# ===========================================================================
+# 7. COMENTARIOS DE LA COMUNIDAD (public.post_comments)
+# ===========================================================================
+
+### 7.1 Agregar un comentario a una publicación
+# Copia el "id" del comentario de la respuesta y pégalo arriba en @commentId
+POST {{baseUrl}}/posts/{{postId}}/comments
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "content": "¡Probé esta aldea en la última guerra y defendió de maravilla un ataque de TH16 al 100%! Muy recomendada."
+}
+
+### 7.2 Listar todos los comentarios de una publicación
+GET {{baseUrl}}/posts/{{postId}}/comments
+
+### 7.3 Eliminar un comentario (Solo el autor o un admin puede eliminarlo)
+DELETE {{baseUrl}}/posts/{{postId}}/comments/{{commentId}}
+Authorization: Bearer {{authToken}}
+
+### 7.4 [MODERACIÓN IA] Intentar agregar comentario con insultos (Esperado: HTTP 400 - Rechazado)
+POST {{baseUrl}}/posts/{{postId}}/comments
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "content": "Esta aldea es una basura inútil y el creador es un idiota."
+}
+
+
+# ===========================================================================
+# 8. ELIMINACIÓN DE PUBLICACIONES (public.community_posts)
+# ===========================================================================
+
+### 8.1 Eliminar una Publicación por ID (Solo el autor o admin)
+DELETE {{baseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+
+
+# ===========================================================================
+# 9. ENCICLOPEDIA DE DATOS Y CALCULADORA TÁCTICA DE DAÑO (ClashTactics)
+# ===========================================================================
+
+# --- 9.A ENCICLOPEDIA / GAME DATA (Estructuras, Hechizos y Habilidades) ---
+
+### 9.1 Listar todas las Estructuras y Defensas con imágenes y rango de niveles
+GET {{baseUrl}}/coc/game-data/buildings
+
+### 9.2 Detalle de una Defensa: Cohete de Defensa Aérea (Air Defense) Nivel 13
+GET {{baseUrl}}/coc/game-data/buildings/air_defense?level=13
+
+### 9.3 Detalle de una Defensa: Catapulta (Scattershot) - Tabla completa de todos los niveles
+GET {{baseUrl}}/coc/game-data/buildings/scattershot
+
+### 9.3B Estructura Temporal Crafteada: Cake-A-Pult Nivel 10 (HP: 4,600)
+GET {{baseUrl}}/coc/game-data/buildings/cake-a-pult?level=10
+
+### 9.3C Estructura Temporal Crafteada: Hero Hunter Nivel 10 (HP: 4,600, DPS vs Heroes: 740)
+GET {{baseUrl}}/coc/game-data/buildings/hero-hunter?level=10
+
+### 9.3D Estructura Temporal Crafteada: Hot Candle Nivel 10 (HP: 4,600)
+GET {{baseUrl}}/coc/game-data/buildings/hot-candle?level=10
+
+### 9.3E Defensa TH17: Monolito (Monolith) Nivel 4 (HP: 5,656)
+GET {{baseUrl}}/coc/game-data/buildings/monolith?level=4
+
+### 9.4 Listar todos los Hechizos de Daño y Tácticos
+GET {{baseUrl}}/coc/game-data/spells
+
+### 9.5 Detalle de un Hechizo: Hechizo de Rayo (Lightning Spell) Nivel 11
+GET {{baseUrl}}/coc/game-data/spells/lightning_spell?level=11
+
+### 9.6 Detalle de un Hechizo: Hechizo de Terremoto (Earthquake Spell) Nivel 5
+GET {{baseUrl}}/coc/game-data/spells/earthquake_spell?level=5
+
+### 9.7 Listar todo el Equipamiento Heroico y Habilidades
+GET {{baseUrl}}/coc/game-data/equipment
+
+### 9.8 Detalle de Habilidad: Flecha Gigante (Giant Arrow) Nivel 18
+GET {{baseUrl}}/coc/game-data/equipment/giant_arrow?level=18
+
+### 9.9 Detalle de Habilidad: Bola de Fuego (Fireball) Nivel 24
+GET {{baseUrl}}/coc/game-data/equipment/fireball?level=24
+
+### 9.9B Detalle de Habilidad: Mochila Cohete (Rocket Backpack - Duque Dragón) Nivel 27
+GET {{baseUrl}}/coc/game-data/equipment/rocket_backpack?level=27
+
+
+# --- 9.B CALCULADORA TÁCTICA: GENERADOR DE RECETAS ÓPTIMAS DE DESTRUCCIÓN ---
+
+### 9.10 Recetas Óptimas para destruir un Antiaéreo Nivel 16 (HP: 2,000)
+# Caso de uso: Usuario tiene Rayos Lvl 11, Terremoto Lvl 5, Flecha Gigante Lvl 18, Mochila Cohete Lvl 27 y Bola de Fuego Lvl 24.
+# Respuesta esperada: Mochila o Flecha o Doble Snipe lo destruyen en 0 hechizos; ZapQuake; Solo Rayos.
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "air_defense",
+    "level": 16
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27,
+    "fireball": 24
+  }
+}
+
+### 9.11 Recetas Óptimas para destruir una Catapulta Nivel 7 Base (HP: 5,800) - Máximo TH18
+# Caso de uso: Estructura pesada de TH18 con 5,800 HP.
+# Respuesta esperada: Todo Junto (1 espacio); Flecha + Mochila + Rayos (3 espacios); Mochila + ZapQuake (4 espacios); etc.
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "scattershot",
+    "level": 7
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27,
+    "fireball": 24
+  }
+}
+
+### 9.12 Recetas Óptimas para destruir un Controlador Aéreo / Soplador Nivel 7 (HP: 1,050)
+# Caso de uso: Nivel máximo real de soplador (Nivel 7). Flecha Gigante o Mochila Cohete destruyen el soplador en 0 hechizos.
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "air_sweeper",
+    "level": 7
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27
+  }
+}
+
+### 9.13 Recetas Óptimas para destruir una Torre Infernal Nivel 9 (HP: 4,000)
+# Caso de uso: Torre Infernal TH15 con Mochila Cohete, Flecha Gigante, Terremoto y Rayos
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "inferno_tower",
+    "level": 9
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27
+  }
+}
+
+### 9.14 Recetas Óptimas vía GET (Ideal para enlaces directos en frontend o pruebas rápidas)
+GET {{baseUrl}}/coc/calculator/optimal-recipes?building=air_defense&level=16&lightning=11&earthquake=5&giant_arrow=18&rocket_backpack=27
+
+### 9.15 Recetas Óptimas con Mochila Cohete (Duque Dragón) y Flecha Gigante para Catapulta Nivel 7 Base (HP: 5,800)
+# Caso de uso: Demostrar "Todo Junto" (Doble Snipe Lineal + ZapQuake = 2 espacios de hechizo)
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "scattershot",
+    "level": 7
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27,
+    "fireball": 24
+  }
+}
+
+### 9.16 Recetas Óptimas para Catapulta Nivel 7 con Supercarga 2 (HP: 5,950)
+# Caso de uso: Catapulta al máximo absoluto de TH18 con Supercarga 2 activada (+150 HP extra).
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "scattershot",
+    "level": 7,
+    "supercharge": 2
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27
+  }
+}
+
+### 9.17 Recetas Óptimas para Torre Infernal Nivel 12 con Supercarga 2 (HP: 5,300)
+# Caso de uso: Torre infernal máx TH18 con Supercarga 2 (+200 HP).
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "inferno_tower",
+    "level": 12,
+    "supercharge": 2
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27
+  }
+}
+
+### 9.18 Recetas Óptimas para Estructura Temporal Cake-A-Pult Nivel 10 (HP: 5,800)
+# Caso de uso: Estructura temporal crafteada al máximo módulo 10 en TH18.
+POST {{baseUrl}}/coc/calculator/optimal-recipes
+Content-Type: application/json
+
+{
+  "target": {
+    "building": "cake_a_pult",
+    "level": 10
+  },
+  "userLevels": {
+    "lightning": 11,
+    "earthquake": 5,
+    "giant_arrow": 18,
+    "rocket_backpack": 27
+  }
+}
+
+### 9.19 Consultar Detalle de Defensa con Supercarga vía GET
+GET {{baseUrl}}/coc/game-data/buildings/scattershot?level=7&supercharge=2
+
+### 9.20 Consultar Detalle de Defensa Crafteada Hero Hunter Lvl 10 vía GET
+GET {{baseUrl}}/coc/game-data/buildings/hero_hunter?level=10
+
+
+# ===========================================================================
+# 10. ASISTENTE TÁCTICO IA / CHATBOT (/api/chat)
+# ===========================================================================
+
+### 10.1 Recomendar ejércitos o diseños de aldea para TH15 desde Comunidad
+POST {{baseUrl}}/chat/message
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "message": "Recomiéndame los mejores ejércitos para TH15 que haya en la comunidad",
+  "history": []
+}
+
+### 10.2 Consultar la calculadora táctica de daño desde el chatbot
+POST {{baseUrl}}/chat/message
+Content-Type: application/json
+
+{
+  "message": "¿Con cuántos rayos y terremotos destruyo un Cohete de Defensa nivel 14?",
+  "history": []
+}
+
+### 10.3 Solicitar cambio de contraseña desde el chatbot
+POST {{baseUrl}}/chat/message
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "message": "Quiero cambiar mi contraseña de la app",
+  "history": []
+}
+
+### 10.4 Preguntar qué funciones tiene ClashTactics
+POST {{baseUrl}}/chat/message
+Content-Type: application/json
+
+{
+  "message": "¿Me puedes explicar qué cosas puedo hacer en la app ClashTactics?",
+  "history": []
+}
+
