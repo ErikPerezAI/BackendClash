@@ -336,7 +336,7 @@ export function getResetPasswordHtml({
       </a>
     </div>
 
-    <p class="footer-text">
+    <p class="footer-text" id="footer-text">
       ¿Problemas para acceder? Contacta al soporte de <a href="clashtactics://">ClashTactics</a>.
     </p>
   </div>
@@ -347,13 +347,20 @@ export function getResetPasswordHtml({
     let currentAccessToken = null;
 
     function buildSafeAppReturnUrl(baseRedirect, rawSearch, rawHash) {
-      const target =
-        typeof baseRedirect === 'string' && /^(clashtactics|exp|exps|https?):\/\//i.test(baseRedirect.trim())
-          ? baseRedirect.trim()
-          : 'clashtactics://google-auth';
+      const normalized = typeof baseRedirect === 'string' ? baseRedirect.trim() : '';
+      const lower = normalized.toLowerCase();
+      const isAllowed =
+        lower.startsWith('clashtactics://') ||
+        lower.startsWith('exp://') ||
+        lower.startsWith('exps://') ||
+        lower.startsWith('http://') ||
+        lower.startsWith('https://');
+      const target = isAllowed ? normalized : 'clashtactics://google-auth';
 
-      const cleanSearch = rawSearch && rawSearch.length > 1 ? rawSearch.replace(/^\?/, '') : '';
-      const cleanHash = rawHash && rawHash.length > 1 ? rawHash.replace(/^#/, '') : '';
+      const cleanSearch =
+        rawSearch && rawSearch.startsWith('?') ? rawSearch.slice(1) : rawSearch || '';
+      const cleanHash =
+        rawHash && rawHash.startsWith('#') ? rawHash.slice(1) : rawHash || '';
 
       let finalUrl = target;
       if (cleanSearch) {
@@ -398,6 +405,8 @@ export function getResetPasswordHtml({
 
       if (hasOAuthReturn) {
         oauthView.style.display = 'block';
+        const footerEl = document.getElementById('footer-text');
+        if (footerEl) footerEl.style.display = 'none';
         if (oauthError) {
           document.getElementById('oauth-title').textContent = 'Volviendo a ClashTactics...';
           document.getElementById('oauth-subtitle').textContent =
